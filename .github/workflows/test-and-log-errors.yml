@@ -1,0 +1,41 @@
+name: Test and Log Errors
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        id: run_tests
+        run: |
+          npx nightwatch --config nightwatch.conf.js tests || exit 1
+        continue-on-error: true
+
+      - name: Log errors to GitHub
+        if: failure()
+        run: |
+          ERROR_LOG=$(cat $(find . -name 'error.log'))
+          ISSUE_BODY="### Test failure detected\n\`\`\`\n$ERROR_LOG\n\`\`\`"
+          curl -X POST -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues \
+            -d "{\"title\": \"Automated Test Failure: $(date +'%Y-%m-%d %H:%M:%S')\", \"body\": \"$ISSUE_BODY\"}"
